@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="148" height="40" viewBox="0 0 148 40">
+  <g fill="none" stroke-width="4" stroke-linecap="round">
+    <rect x="106" y="10" width="22" height="14" rx="7" stroke="#1fb5d6" transform="rotate(-30 117 17)"/>
+    <rect x="120" y="16" width="22" height="14" rx="7" stroke="#0b1450" transform="rotate(-30 131 23)"/>
+  </g>
+  <text x="100" y="28" text-anchor="end" font-family="Rubik, Arial, sans-serif" font-size="24" font-weight="800" fill="#0b1450">קישורים</text>
+</svg>
