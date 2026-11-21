@@ -7,9 +7,23 @@ function icon(id) {
   return `<svg class="ic" aria-hidden="true"><use href="#${id}"/></svg>`;
 }
 
-/* Returns a small traffic-light lamp */
-function lamp(light) {
-  return `<span class="lamp lamp--${light}" aria-hidden="true"></span>`;
+/* A state name in its traffic-light color (color + text, never color alone) */
+function stateWord(stateKey) {
+  const s = STATES[stateKey];
+  return `<span class="sw sw--${s.light}"><span class="dot dot--${s.light}" aria-hidden="true"></span>${s.label}</span>`;
+}
+
+/* True when the learner asked the OS for less motion */
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* Promise based pause (used for sequential reveals) */
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, REDUCED_MOTION ? 0 : ms));
+}
+
+/* Escapes learner input before it is placed in innerHTML */
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 /* Feedback types shared by the practice, the handover sheet and the quiz */
@@ -21,15 +35,15 @@ const FEEDBACK = {
   invalid: { cls: 'fb--missing', icon: 'i-alert', title: 'יש לבדוק את התשובה.' }
 };
 
-/* Renders a feedback box into a container */
+/* Renders a feedback message into a container */
 function showFeedback(container, type, message) {
   const fb = FEEDBACK[type];
-  container.classList.remove('fb', 'fb--correct', 'fb--partial', 'fb--wrong', 'fb--missing');
+  clearFeedback(container);
   container.classList.add('fb', fb.cls);
-  container.innerHTML = `<div><strong>${fb.title}</strong> ${message}</div>`;
+  container.innerHTML = `<span class="fb-icon">${icon(fb.icon)}</span><div><strong>${fb.title}</strong> ${message}</div>`;
 }
 
-/* Clears a feedback box */
+/* Clears a feedback message */
 function clearFeedback(container) {
   container.classList.remove('fb', 'fb--correct', 'fb--partial', 'fb--wrong', 'fb--missing');
   container.innerHTML = '';
