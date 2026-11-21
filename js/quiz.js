@@ -1,7 +1,8 @@
 /* ==========================================================
-   quiz.js – Section 6: summative assessment.
-   Every checker returns { status, msg } where status is
-   correct | partial | wrong | missing | invalid.
+   quiz.js – Chapter 7: summative assessment, one question at
+   a time. Every checker returns { status, msg } where status
+   is correct | partial | wrong | missing | invalid.
+   missing / invalid block moving on; the rest lock the answer.
    getFinalScore() is kept separate for the SCORM stage.
    ========================================================== */
 const POINTS = { correct: 20, partial: 10, wrong: 0, missing: 0, invalid: 0 };
@@ -31,7 +32,7 @@ const QUESTIONS = [
       if (hits === 0) return { status: 'wrong', msg: 'חסרים מה התקלה, באיזו שעה הביקור ועד מתי מחכים לאישור.' };
       return {
         status: 'partial',
-        msg: `זיהיתם ${hits} מתוך 3.${extra ? ' מתי הלקוח התקשר לפני שנה לא עוזר למחליף עכשיו.' : ''} חסר לו: מה התקלה, השעה, ועד מתי מחכים לאישור.`
+        msg: `זיהיתם ${hits} מתוך 3.${extra ? ' מתי הלקוח הצטרף לחברה לא עוזר למחליף עכשיו.' : ''} חסר לו: מה התקלה, השעה, ועד מתי מחכים לאישור.`
       };
     }
   },
@@ -80,60 +81,95 @@ const QUESTIONS = [
 
 /* Total score 0–100 (will be reported to the LMS in stage 2) */
 function getFinalScore() {
-  return lastResults.reduce((sum, r) => sum + POINTS[r.status], 0);
+  return lastResults.reduce((sum, r) => sum + (r ? POINTS[r.status] : 0), 0);
 }
 
 (function initQuiz() {
   const form = document.getElementById('quizForm');
+  const body = document.getElementById('quizBody');
   const summary = document.getElementById('quizSummary');
   const resetBtn = document.getElementById('quizReset');
+  const prevBtn = document.getElementById('quizPrev');
+  const actionBtn = document.getElementById('quizAction');
+  const bar = document.getElementById('quizBar');
+  let current = 0;
+
+  const checked = (i) => Boolean(lastResults[i]);
+
+  function show(index) {
+    current = index;
+    QUESTIONS.forEach((q, i) => { document.getElementById(q.id).hidden = i !== index; });
+    prevBtn.hidden = index === 0;
+    if (!checked(index)) actionBtn.textContent = 'בדיקה';
+    else actionBtn.textContent = index < QUESTIONS.length - 1 ? 'לשאלה הבאה' : 'לציון';
+    bar.style.width = `${(lastResults.filter(Boolean).length / QUESTIONS.length) * 100}%`;
+  }
+
+  const lock = (q, locked) => q.fields().forEach((f) => { f.disabled = locked; });
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    lastResults = QUESTIONS.map((q) => {
-      const result = q.check();
-      const box = document.getElementById(`${q.id}-fb`);
-      showFeedback(box, result.status, result.msg);
-      const bad = result.status === 'missing' || result.status === 'invalid';
-      q.fields().forEach((f) => setInvalid(f, bad));
-      document.getElementById(q.id).dataset.status = result.status;
-      return result;
-    });
+    const q = QUESTIONS[current];
 
-    // Missing or invalid answers block the summary
-    const blocking = QUESTIONS.filter((q, i) => ['missing', 'invalid'].includes(lastResults[i].status));
-    if (blocking.length) {
-      summary.hidden = false;
-      summary.className = 'quiz-summary fb fb--missing';
-      summary.innerHTML = `<div><strong>עוד לא סיימתם.</strong> יש ${blocking.length} שאלות שצריך להשלים או לתקן.</div>`;
-      blocking[0].fields()[0].focus();
+    // Already answered – move on
+    if (checked(current)) {
+      if (current < QUESTIONS.length - 1) {
+        show(current + 1);
+        document.querySelector(`#${QUESTIONS[current].id} input, #${QUESTIONS[current].id} select, #${QUESTIONS[current].id} textarea`).focus();
+      } else {
+        showSummary();
+      }
       return;
     }
 
+    const result = q.check();
+    showFeedback(document.getElementById(`${q.id}-fb`), result.status, result.msg);
+    const bad = result.status === 'missing' || result.status === 'invalid';
+    q.fields().forEach((f) => setInvalid(f, bad));
+    if (bad) { q.fields()[0].focus(); return; }
+
+    lastResults[current] = result;
+    document.getElementById(q.id).dataset.status = result.status;
+    lock(q, true);
+    show(current);
+    actionBtn.focus();
+  });
+
+  prevBtn.addEventListener('click', () => { if (current > 0) show(current - 1); });
+
+  function showSummary() {
     const score = getFinalScore();
     const type = score >= 80 ? 'correct' : score >= 50 ? 'partial' : 'wrong';
     const message = score >= 80
       ? 'המחליף שלך יקבל תמונת מצב ברורה ויידע במה לטפל קודם.'
       : score >= 50
-        ? 'רוב המידע עובר, אבל המחליף עלול לפספס פרט חשוב. עברו על המשוב בשאלות המסומנות.'
+        ? 'רוב המידע עובר, אבל המחליף עלול לפספס פרט חשוב.'
         : 'המחליף שלך עלול להיכנס למשמרת בלי לדעת מה דחוף. מומלץ לחזור לפרקים 2 ו-3.';
+    body.hidden = true;
     summary.hidden = false;
-    summary.className = `quiz-summary fb ${FEEDBACK[type].cls}`;
-    summary.innerHTML = `<div><p class="quiz-score">${score} / 100</p><p class="mb-0">${message}</p></div>`;
+    summary.className = `quiz-summary quiz-summary--${type}`;
+    summary.innerHTML = `<p class="score" style="--p:${score}"><span>${score}</span><small>מתוך 100</small></p><p class="score-msg">${message}</p>`;
     summary.focus();
     resetBtn.hidden = false;
-  });
+    try { localStorage.setItem('kishurim-lomda-score', JSON.stringify(score)); } catch (e) { /* storage blocked */ }
+    Progress.complete('quiz');
+  }
 
   resetBtn.addEventListener('click', () => {
     form.reset();
     lastResults = [];
     QUESTIONS.forEach((q) => {
       clearFeedback(document.getElementById(`${q.id}-fb`));
+      lock(q, false);
       q.fields().forEach((f) => setInvalid(f, false));
       delete document.getElementById(q.id).dataset.status;
     });
     summary.hidden = true;
+    body.hidden = false;
     resetBtn.hidden = true;
+    show(0);
     document.getElementById('q1a').focus();
   });
+
+  show(0);
 })();
